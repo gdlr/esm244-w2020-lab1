@@ -1,0 +1,119 @@
+---
+title: "lab_1_gd"
+author: "Gabriel De La Rosa"
+date: "1/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(kableExtra)
+
+```
+
+Read in fisheries data
+
+```{r}
+us_landings <- read_csv(here("data", "noaa_fisheries.csv")) %>% 
+  clean_names()
+```
+
+Let's clean this data frame up so it's tidy...
+
+How do we get rid of the dollar sign?
+tidyr::separate() then as.numeric()...
+or readr::parse_number()
+
+parse_number is awesome! use it within a mutate()
+parse_number only displays 7 sig figs, but doesn't actually get rid of any digits
+
+
+```{r}
+
+landings_tidy <- us_landings %>% 
+  mutate(state = str_to_lower(state),
+         afs_name = str_to_lower(afs_name)) %>% 
+  mutate(dollars_usd = (parse_number(dollars_usd,
+                      na = c("NA"))))
+```
+
+
+Let's just get some salmon information...
+
+How do we remove data that we don't want, aka the aggregate species data?
+Use str_remove, and then specify by the string you want it to recognize. 
+Careful, though, better have a good reason for ignoring that... jk this doesn't remove data, just the word...
+
+We want data for just salmon. how do we filter by strings? use str_detect()
+If you use it in the beginning of a filter function, it only keeps things with that string.
+
+How do we separate species from salmon? we can use separate() 
+
+```{r}
+
+salmon_landings <- landings_tidy %>% 
+  mutate(afs_clean = str_remove(afs_name, " aggregate")) %>% 
+  filter(str_detect(afs_clean, patter = "salmon")) %>% 
+  separate(afs_clean, into = c("group", "species"), sep = ",")
+
+```
+
+
+Find some grouped summary data:
+
+let's find the annual total US landings and dollar value, summing across all states, for each TYPE of salmon using `group_by()` and `summarize()`
+
+```{r}
+salmon_summary <- salmon_landings %>% 
+  group_by(year, species) %>% 
+  summarize(
+    tot_landings = sum(landings_pounds),
+    tot_value = sum(dollars_usd))
+```
+
+
+Make a graph...
+
+```{r}
+
+salmon_landings_graph <- 
+  ggplot(salmon_summary, aes(x = year, y = tot_landings)) +
+  geom_line(aes(color = species)) +
+  theme_bw()
+  
+salmon_landings_graph
+
+```
+
+Now we can export our graph with ggsave()
+
+```{r}
+
+ggsave(plot = salmon_landings_graph, 
+       here("figures", "us_salmon_gd.png"),
+       height = 5, 
+       width = 8)
+
+```
+
+
+Let's make a nice Kable table...
+
+
+```{r}
+salmon_first_5 <- salmon_summary %>% 
+  head(5)
+```
+
+```{r}
+
+kable(salmon_first_5) %>% 
+  kable_styling(bootstrap_options = "striped",
+                full_width = FALSE)
+
+```
+
